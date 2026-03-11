@@ -1,0 +1,60 @@
+light:
+  - platform: esp32_rmt_led_strip
+    rgb_order: GRB
+    pin: 17
+    num_leds: 4
+    chipset: ws2812
+    name: "My Light"
+    
+i2c:
+  sda: 14
+  scl: 21
+  scan: true
+  id: bus_a
+
+sensor:
+  - platform: scd4x
+    co2:
+      name: "SDC4x CO2"
+      id: SDC4x_CO2
+    temperature:
+      name: "SDC4x Temperature"
+      id: SDC4x_temp
+    humidity:
+      name: "SDC4x Humidity"
+      id: SDC4x_hum
+  - platform: bme280_i2c
+    address: 0x76
+    temperature:
+      name: "BME280 Temperature"
+      id: bme_temp
+    pressure:
+      name: "BME280 Pressure"
+      id: bme_press
+    humidity:
+      name: "BME280 Humidity"
+      id: bme_hum
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    lambda: |-
+      it.strftime(0, 10, id(font1), TextAlign::BASELINE_LEFT,  "Time: %H:%M", id(ntptime).now());
+      it.printf(0, 20, id(font1), TextAlign::BASELINE_LEFT, "PPM:  %.0f", id(SDC4x_CO2).state);
+      it.printf(0, 30, id(font1), TextAlign::BASELINE_LEFT, "temperature: %.1f C", id(bme_temp).state);
+      it.printf(0, 40, id(font1), TextAlign::BASELINE_LEFT, "humidity:    %.1f %%", id(bme_hum).state);
+      it.printf(0, 50, id(font1), TextAlign::BASELINE_LEFT, "presssure:   %.1f hPa", id(bme_press).state);
+      
+time:
+  - platform: sntp
+    id: ntptime
+    timezone: Europe/Amsterdam
+    servers:
+     - 0.pool.ntp.org
+     - 1.pool.ntp.org
+     - 2.pool.ntp.org
+     
+font:
+  - file: 'slkscr.ttf'
+    id: font1
+    size: 8
