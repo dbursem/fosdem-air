@@ -1,3 +1,18 @@
+esphome:
+  name: esphome-co2monitor
+  friendly_name: esphome-co2monitor
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
 light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB
