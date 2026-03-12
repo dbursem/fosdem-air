@@ -32,6 +32,41 @@ sensor:
     co2:
       name: "SDC4x CO2"
       id: SDC4x_CO2
+      on_value_range:
+      - below: 700
+        then:
+          - light.control:
+              id: neopixels
+              state: on
+              green: 100%
+              red: 0%
+              blue: 0%
+      - above: 700
+        below: 900
+        then:
+          - light.control:
+              id: neopixels
+              state: on
+              green: 100%
+              red: 100%
+              blue: 0%
+      - above: 900
+        below: 1200
+        then:
+          - light.control:
+              id: neopixels
+              state: on
+              green: 0%
+              red: 100%
+              blue: 0%
+      - above: 1200
+        then:
+          - light.control:
+              id: neopixels
+              state: on
+              green: 0%
+              red: 100%
+              blue: 100%
     temperature:
       name: "SDC4x Temperature"
       id: SDC4x_temp
@@ -54,11 +89,20 @@ display:
   - platform: ssd1306_i2c
     model: "SSD1306 128x64"
     lambda: |-
-      it.strftime(0, 10, id(font1), TextAlign::BASELINE_LEFT,  "Time: %H:%M", id(ntptime).now());
-      it.printf(0, 20, id(font1), TextAlign::BASELINE_LEFT, "PPM:  %.0f", id(SDC4x_CO2).state);
-      it.printf(0, 30, id(font1), TextAlign::BASELINE_LEFT, "temperature: %.1f C", id(bme_temp).state);
-      it.printf(0, 40, id(font1), TextAlign::BASELINE_LEFT, "humidity:    %.1f %%", id(bme_hum).state);
-      it.printf(0, 50, id(font1), TextAlign::BASELINE_LEFT, "presssure:   %.1f hPa", id(bme_press).state);
+      it.printf(0, 20, id(font4), TextAlign::BASELINE_LEFT, "CO2 PPM:");
+      it.printf(64, 20, id(font4), TextAlign::BASELINE_LEFT, "%.0f", id(SDC4x_CO2).state);
+      
+      it.printf(0, 29, id(font1), TextAlign::BASELINE_LEFT, "temp:");
+      it.printf(64, 29, id(font1), TextAlign::BASELINE_LEFT, "%.1f C", id(bme_temp).state);
+
+      it.printf(0, 38, id(font1), TextAlign::BASELINE_LEFT, "humidity:");
+      it.printf(64, 38, id(font1), TextAlign::BASELINE_LEFT, "%.1f %%", id(bme_hum).state);
+
+      it.printf(0, 47, id(font1), TextAlign::BASELINE_LEFT, "presssure:");
+      it.printf(64, 47, id(font1), TextAlign::BASELINE_LEFT, "%.1f hPa", id(bme_press).state);
+      
+      it.printf(0, 56, id(font1), TextAlign::BASELINE_LEFT,  "Time: ");
+      it.strftime(64, 56, id(font1), TextAlign::BASELINE_LEFT,  "%H:%M", id(ntptime).now());
       
 time:
   - platform: sntp
@@ -73,3 +117,6 @@ font:
   - file: 'slkscr.ttf'
     id: font1
     size: 8
+  - file: 'BebasNeue-Regular.ttf'
+    id: font4
+    size: 20
