@@ -1,17 +1,38 @@
+substitutions:
+  device:
+    name: esphome-co2monitor
+    captive_portal: !secret captive-portal
+
 esphome:
-  name: esphome-fosdem26-air
-  friendly_name: esphome-fosdem26-air
+  name: ${device.name}
+  friendly_name: ${device.name}
 
 esp32:
   board: esp32-s3-devkitc-1
   framework:
     type: esp-idf
 
+# Enable logging
 logger:
+  
+web_server:
+  version: 3
+
+ota:
+  - platform: esphome
+    password: !secret ota-update
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  min_auth_mode: WPA2
+  id: wifi_id
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: ${device.name}
+    password: !secret captive-portal
+
+captive_portal:
 
 light:
   - platform: esp32_rmt_led_strip
@@ -20,6 +41,7 @@ light:
     num_leds: 4
     chipset: ws2812
     name: "My Light"
+    id: neopixels      
     
 i2c:
   sda: 14
@@ -27,52 +49,37 @@ i2c:
   scan: true
   id: bus_a
 
+http_request:
+  
 sensor:
   - platform: scd4x
+    update_interval: 10s
     co2:
-      name: "SDC4x CO2"
-      id: SDC4x_CO2
-      on_value_range:
-      - below: 700
+      name: "SCD4x CO2"
+      id: SCD4x_CO2
+      on_value: 
         then:
-          - light.control:
-              id: neopixels
-              state: on
-              green: 100%
-              red: 0%
-              blue: 0%
-      - above: 700
-        below: 900
-        then:
-          - light.control:
-              id: neopixels
-              state: on
-              green: 100%
-              red: 100%
-              blue: 0%
-      - above: 900
-        below: 1200
-        then:
-          - light.control:
-              id: neopixels
-              state: on
-              green: 0%
-              red: 100%
-              blue: 0%
-      - above: 1200
-        then:
-          - light.control:
-              id: neopixels
-              state: on
-              green: 0%
-              red: 100%
-              blue: 100%
+          - lambda: |- 
+              auto call = id(neopixels).turn_on();
+              auto ppm = id(SCD4x_CO2).state;
+              if (ppm < 700) { 
+                call.set_rgb(0,1,0); // green
+              } else if (ppm < 900) {
+                call.set_rgb(1,0.8,0); // yellow
+              } else if (ppm < 1200) {
+                call.set_rgb(1,0,0); // red
+              } else {
+                call.set_rgb(1,0,0.8); // purple
+              } 
+              call.perform();
     temperature:
-      name: "SDC4x Temperature"
-      id: SDC4x_temp
+      name: "SCD4x Temperature"
+      id: SCD4x_temp
     humidity:
-      name: "SDC4x Humidity"
-      id: SDC4x_hum
+      name: "SCD4x Humidity"
+      id: SCD4x_hum
+    ambient_pressure_compensation: true
+    ambient_pressure_compensation_source: bme_press
   - platform: bme280_i2c
     address: 0x76
     temperature:
@@ -85,12 +92,19 @@ sensor:
       name: "BME280 Humidity"
       id: bme_hum
 
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: ip_address
+      address_0: 
+        id: ip_address_0
+
 display:
   - platform: ssd1306_i2c
     model: "SSD1306 128x64"
-    lambda: |-
-      it.printf(0, 20, id(font4), TextAlign::BASELINE_LEFT, "CO2 PPM:");
-      it.printf(64, 20, id(font4), TextAlign::BASELINE_LEFT, "%.0f", id(SDC4x_CO2).state);
+    lambda: |-      
+      it.printf(0, 20, id(font2), TextAlign::BASELINE_LEFT, "CO2 PPM:");
+      it.printf(64, 20, id(font2), TextAlign::BASELINE_LEFT, "%.0f", id(SCD4x_CO2).state);
       
       it.printf(0, 29, id(font1), TextAlign::BASELINE_LEFT, "temp:");
       it.printf(64, 29, id(font1), TextAlign::BASELINE_LEFT, "%.1f C", id(bme_temp).state);
@@ -100,10 +114,15 @@ display:
 
       it.printf(0, 47, id(font1), TextAlign::BASELINE_LEFT, "presssure:");
       it.printf(64, 47, id(font1), TextAlign::BASELINE_LEFT, "%.1f hPa", id(bme_press).state);
-      
-      it.printf(0, 56, id(font1), TextAlign::BASELINE_LEFT,  "Time: ");
-      it.strftime(64, 56, id(font1), TextAlign::BASELINE_LEFT,  "%H:%M", id(ntptime).now());
-      
+      if (id(wifi_id).is_ap_active()) {
+        it.print(0, 56, id(font1), TextAlign::BASELINE_LEFT,  "ssid: ${device.name}");
+        it.print(0, 64, id(font1), TextAlign::BASELINE_LEFT,  "pw: ${device.captive_portal}");  
+      } else {
+        it.printf(0, 56, id(font1), TextAlign::BASELINE_LEFT,  "Time: ");
+        it.strftime(64, 56, id(font1), TextAlign::BASELINE_LEFT,  "%H:%M", id(ntptime).now());
+        it.printf(0,64, id(font1), TextAlign::BASELINE_LEFT, "IP:");
+        it.printf(64,64, id(font1), TextAlign::BASELINE_LEFT, "%s", id(ip_address).state.c_str());
+      }      
 time:
   - platform: sntp
     id: ntptime
@@ -112,11 +131,38 @@ time:
      - 0.pool.ntp.org
      - 1.pool.ntp.org
      - 2.pool.ntp.org
-     
+    on_time: 
+      - seconds: 0
+        minutes: /1
+        then: 
+          - http_request.post:               
+              url: !lambda |-
+                return id(callback_url).state.c_str();
+              request_headers:
+                Content-Type: application/json
+              json: |-
+                root["scd4x"]["co2"] = id(SCD4x_CO2).state;
+                root["scd4x"]["temp"] = id(SCD4x_temp).state;
+                root["scd4x"]["hum"] = id(SCD4x_hum).state;
+                root["bme"]["temp"] = id(bme_temp).state;
+                root["bme"]["hum"] = id(bme_hum).state;
+                root["bme"]["press"] = id(bme_press).state;
+
 font:
   - file: 'slkscr.ttf'
     id: font1
     size: 8
   - file: 'BebasNeue-Regular.ttf'
-    id: font4
+    id: font2
     size: 20
+
+text:
+  - platform: template
+    name: "callback url"
+    id: callback_url
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    initial_value: "http://dbursem.nl/co2/"
+        
