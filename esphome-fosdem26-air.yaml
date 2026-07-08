@@ -141,6 +141,7 @@ time:
               request_headers:
                 Content-Type: application/json
               json: |-
+                root["location"] = id(location).state.c_str();
                 root["scd4x"]["co2"] = id(SCD4x_CO2).state;
                 root["scd4x"]["temp"] = id(SCD4x_temp).state;
                 root["scd4x"]["hum"] = id(SCD4x_hum).state;
@@ -165,4 +166,12 @@ text:
     max_length: 100
     mode: text
     initial_value: "http://dbursem.nl/co2/"
+  - platform: template
+    name: "location"
+    id: location
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    initial_value: "living-room"
         
